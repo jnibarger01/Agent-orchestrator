@@ -88,11 +88,9 @@ export const ProviderSettings = () => {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700">
-          <Settings className="mr-2 h-4 w-4" />
-          Settings
-        </Button>
+      <DialogTrigger render={<Button variant="outline" size="sm" className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" />}>
+        <Settings className="mr-2 h-4 w-4" />
+        Settings
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-800 text-slate-200">
         <DialogHeader>

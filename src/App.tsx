@@ -5,12 +5,13 @@ import { TaskInput } from './components/TaskInput';
 import { TaskList } from './components/TaskList';
 import { LogViewer } from './components/LogViewer';
 import { ProviderSettings } from './components/ProviderSettings';
+import { AgentRegistry } from './components/AgentRegistry';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Separator } from './components/ui/separator';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import { LayoutDashboard, ListTodo, Terminal, Settings, Cpu } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Terminal, Settings, Cpu, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -138,111 +139,132 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-          
-          {/* Left Column: Controls & Task List */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
-            <TaskInput 
-              onRun={handleRunTask} 
-              providers={engine.getProviders()} 
-              disabled={!isEngineReady}
-            />
+        <Tabs defaultValue="dashboard" className="w-full">
+          <div className="mb-8 flex items-center justify-between">
+            <TabsList className="bg-slate-900/50 border border-slate-800">
+              <TabsTrigger value="dashboard" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400">
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger value="agents" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400">
+                <Users className="mr-2 h-4 w-4" />
+                Agent Registry
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-            <Card className="flex-1 border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg font-medium text-slate-100 flex items-center gap-2">
-                  <ListTodo className="h-5 w-5 text-indigo-400" />
-                  Orchestration History
-                </CardTitle>
-                <span className="text-xs text-slate-500 font-mono">{tasks.length} TASKS</span>
-              </CardHeader>
-              <CardContent>
-                <TaskList 
-                  tasks={tasks} 
-                  onSelect={(t) => setSelectedTaskId(t.id)} 
-                  selectedTaskId={selectedTaskId}
+          <TabsContent value="dashboard" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+              
+              {/* Left Column: Controls & Task List */}
+              <div className="lg:col-span-5 flex flex-col gap-6">
+                <TaskInput 
+                  onRun={handleRunTask} 
+                  providers={engine.getProviders()} 
+                  disabled={!isEngineReady}
                 />
-              </CardContent>
-            </Card>
-          </div>
 
-          {/* Right Column: Details & Logs */}
-          <div className="lg:col-span-7">
-            <AnimatePresence mode="wait">
-              {selectedTask ? (
-                <motion.div
-                  key={selectedTask.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-xl font-semibold text-white">
-                          Task Details
-                        </CardTitle>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-mono">ID: {selectedTask.id}</span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-6">
-                      <div>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Prompt</h4>
-                        <div className="rounded-lg bg-slate-800 p-4 font-mono text-sm text-slate-300 border border-slate-700">
-                          {selectedTask.prompt}
-                        </div>
-                      </div>
+                <Card className="flex-1 border-slate-800 bg-slate-900/50 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg font-medium text-slate-100 flex items-center gap-2">
+                      <ListTodo className="h-5 w-5 text-indigo-400" />
+                      Orchestration History
+                    </CardTitle>
+                    <span className="text-xs text-slate-500 font-mono">{tasks.length} TASKS</span>
+                  </CardHeader>
+                  <CardContent>
+                    <TaskList 
+                      tasks={tasks} 
+                      onSelect={(t) => setSelectedTaskId(t.id)} 
+                      selectedTaskId={selectedTaskId}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
 
-                      <Tabs defaultValue="logs" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 bg-slate-800 border border-slate-700">
-                          <TabsTrigger value="logs" className="data-[state=active]:bg-slate-700">
-                            <Terminal className="mr-2 h-4 w-4" />
-                            Live Logs
-                          </TabsTrigger>
-                          <TabsTrigger value="result" className="data-[state=active]:bg-slate-700">
-                            <LayoutDashboard className="mr-2 h-4 w-4" />
-                            Result
-                          </TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="logs" className="mt-4">
-                          <LogViewer logs={selectedTask.logs} />
-                        </TabsContent>
-                        <TabsContent value="result" className="mt-4">
-                          <div className="rounded-lg bg-slate-950 p-6 border border-slate-800 min-h-[300px]">
-                            {selectedTask.result ? (
-                              <div className="prose prose-invert max-w-none">
-                                <pre className="whitespace-pre-wrap font-sans text-slate-300">
-                                  {selectedTask.result}
-                                </pre>
-                              </div>
-                            ) : (
-                              <div className="flex h-[250px] items-center justify-center text-slate-600 italic">
-                                {selectedTask.status === 'running' ? 'Processing results...' : 'No results available yet.'}
-                              </div>
-                            )}
+              {/* Right Column: Details & Logs */}
+              <div className="lg:col-span-7">
+                <AnimatePresence mode="wait">
+                  {selectedTask ? (
+                    <motion.div
+                      key={selectedTask.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-sm">
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-xl font-semibold text-white">
+                              Task Details
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 font-mono">ID: {selectedTask.id}</span>
+                            </div>
                           </div>
-                        </TabsContent>
-                      </Tabs>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ) : (
-                <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-900/20 p-12 text-center">
-                  <div className="mb-4 rounded-full bg-slate-800 p-4">
-                    <Cpu className="h-8 w-8 text-slate-600" />
-                  </div>
-                  <h3 className="text-lg font-medium text-slate-400">No Task Selected</h3>
-                  <p className="mt-2 text-sm text-slate-600 max-w-xs mx-auto">
-                    Select a task from the history or start a new orchestration to view details and logs.
-                  </p>
-                </div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-6">
+                          <div>
+                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Prompt</h4>
+                            <div className="rounded-lg bg-slate-800 p-4 font-mono text-sm text-slate-300 border border-slate-700">
+                              {selectedTask.prompt}
+                            </div>
+                          </div>
+
+                          <Tabs defaultValue="logs" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2 bg-slate-800 border border-slate-700">
+                              <TabsTrigger value="logs" className="data-[state=active]:bg-slate-700">
+                                <Terminal className="mr-2 h-4 w-4" />
+                                Live Logs
+                              </TabsTrigger>
+                              <TabsTrigger value="result" className="data-[state=active]:bg-slate-700">
+                                <LayoutDashboard className="mr-2 h-4 w-4" />
+                                Result
+                              </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="logs" className="mt-4">
+                              <LogViewer logs={selectedTask.logs} />
+                            </TabsContent>
+                            <TabsContent value="result" className="mt-4">
+                              <div className="rounded-lg bg-slate-950 p-6 border border-slate-800 min-h-[300px]">
+                                {selectedTask.result ? (
+                                  <div className="prose prose-invert max-w-none">
+                                    <pre className="whitespace-pre-wrap font-sans text-slate-300">
+                                      {selectedTask.result}
+                                    </pre>
+                                  </div>
+                                ) : (
+                                  <div className="flex h-[250px] items-center justify-center text-slate-600 italic">
+                                    {selectedTask.status === 'running' ? 'Processing results...' : 'No results available yet.'}
+                                  </div>
+                                )}
+                              </div>
+                            </TabsContent>
+                          </Tabs>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ) : (
+                    <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-900/20 p-12 text-center">
+                      <div className="mb-4 rounded-full bg-slate-800 p-4">
+                        <Cpu className="h-8 w-8 text-slate-600" />
+                      </div>
+                      <h3 className="text-lg font-medium text-slate-400">No Task Selected</h3>
+                      <p className="mt-2 text-sm text-slate-600 max-w-xs mx-auto">
+                        Select a task from the history or start a new orchestration to view details and logs.
+                      </p>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="agents" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+            <AgentRegistry />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Footer */}

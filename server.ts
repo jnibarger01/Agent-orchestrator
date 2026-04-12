@@ -5,12 +5,16 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import bodyParser from "body-parser";
 import Database from "better-sqlite3";
+import { WorkflowEngine } from "./src/lib/orchestrator/workflowEngine";
+import { StateManager } from "./src/lib/orchestrator/stateManager";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize SQLite Database
 const db = new Database("orchestrator.db");
+const workflowEngine = new WorkflowEngine(db);
+const stateManager = new StateManager(db);
 
 // Create tables if they don't exist
 db.exec(`
@@ -48,6 +52,52 @@ db.exec(`
     enabled INTEGER DEFAULT 1,
     created_at INTEGER,
     updated_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS workflows (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    initial_step TEXT NOT NULL,
+    steps_json TEXT NOT NULL,
+    created_at INTEGER,
+    updated_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS workflow_runs (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    current_step_id TEXT,
+    context_json TEXT NOT NULL,
+    created_at INTEGER,
+    updated_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS run_states (
+    run_id TEXT PRIMARY KEY,
+    state_json TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    updated_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS artifacts (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    step_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details_json TEXT NOT NULL,
+    created_at INTEGER
   );
 `);
 
@@ -331,6 +381,105 @@ async function startServer() {
     const result = db.prepare("DELETE FROM agents WHERE id = ?").run(req.params.id);
     if (result.changes === 0) return res.status(404).json({ error: "Agent not found" });
     res.status(204).send();
+  });
+
+  // --- Workflow Endpoints ---
+
+  app.post("/api/v1/workflows", authMiddleware, (req, res) => {
+    const { id, name, version, description, initialStep, steps } = req.body;
+    
+    if (!id || !name || !version || !initialStep || !steps) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      const insert = db.prepare(`
+        INSERT INTO workflows (id, name, version, description, initial_step, steps_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const now = Date.now();
+      insert.run(id, name, version, description || '', initialStep, JSON.stringify(steps), now, now);
+      res.status(201).json({ id });
+    } catch (error: any) {
+      if (error.message.includes("UNIQUE constraint failed")) {
+        return res.status(409).json({ error: "Workflow ID already exists" });
+      }
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/v1/workflows/:id", authMiddleware, (req, res) => {
+    const row = db.prepare("SELECT * FROM workflows WHERE id = ?").get(req.params.id) as any;
+    if (!row) return res.status(404).json({ error: "Workflow not found" });
+    res.json({ ...row, steps: JSON.parse(row.steps_json) });
+  });
+
+  app.post("/api/v1/workflow-runs", authMiddleware, async (req, res) => {
+    const { workflowId, inputs } = req.body;
+    if (!workflowId) return res.status(400).json({ error: "Missing workflowId" });
+
+    try {
+      const runId = await workflowEngine.startRun(workflowId, inputs || {});
+      res.status(201).json({ id: runId });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/v1/workflow-runs/:id", authMiddleware, (req, res) => {
+    const row = db.prepare("SELECT * FROM workflow_runs WHERE id = ?").get(req.params.id) as any;
+    if (!row) return res.status(404).json({ error: "Run not found" });
+    res.json({ ...row, context: JSON.parse(row.context_json) });
+  });
+
+  // --- Shared State Endpoints ---
+
+  app.post("/api/v1/runs/:id/state/init", authMiddleware, (req, res) => {
+    try {
+      const state = stateManager.initializeState(req.params.id, req.body.initialContext);
+      res.status(201).json(state);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/v1/runs/:id/state", authMiddleware, (req, res) => {
+    const state = stateManager.getState(req.params.id);
+    if (!state) return res.status(404).json({ error: "State not found" });
+    res.json(state);
+  });
+
+  app.patch("/api/v1/runs/:id/state", authMiddleware, (req, res) => {
+    const { expectedVersion, patch } = req.body;
+    if (expectedVersion === undefined || !patch) {
+      return res.status(400).json({ error: "Missing expectedVersion or patch" });
+    }
+    try {
+      const newState = stateManager.updateState(req.params.id, expectedVersion, patch);
+      res.json(newState);
+    } catch (error: any) {
+      if (error.message.includes("Concurrency conflict")) {
+        return res.status(409).json({ error: error.message });
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/v1/runs/:id/artifacts", authMiddleware, (req, res) => {
+    res.json(stateManager.getArtifacts(req.params.id));
+  });
+
+  app.post("/api/v1/runs/:id/artifacts", authMiddleware, (req, res) => {
+    try {
+      const artifact = stateManager.saveArtifact({ ...req.body, runId: req.params.id });
+      res.status(201).json(artifact);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/v1/runs/:id/audit", authMiddleware, (req, res) => {
+    res.json(stateManager.getAuditLogs(req.params.id));
   });
 
   // Vite middleware for development
