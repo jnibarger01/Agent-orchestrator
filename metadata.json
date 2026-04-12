@@ -1,0 +1,5 @@
+{
+  "name": "ClawOrch Agent Orchestrator",
+  "description": "A full-stack local agent orchestrator ready for OpenClaw, Claude Code, and Hermes integration.",
+  "requestFramePermissions": []
+}
