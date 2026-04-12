@@ -16,6 +16,8 @@ export const AgentRegistry = () => {
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedAgentDetails, setSelectedAgentDetails] = useState<AgentDefinition | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
@@ -33,6 +35,7 @@ export const AgentRegistry = () => {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [toolValidationErrors, setToolValidationErrors] = useState<Record<number, string>>({});
+  const [modalValidationErrors, setModalValidationErrors] = useState<{ input?: string, output?: string }>({});
 
   // Detail Panel State (for the selected agent)
   const [detailData, setDetailData] = useState<{ inputSchemaStr: string, outputSchemaStr: string, tools: any[] }>({
@@ -43,14 +46,40 @@ export const AgentRegistry = () => {
   const [validationErrors, setValidationErrors] = useState<{ input?: string, output?: string }>({});
   const [detailToolValidationErrors, setDetailToolValidationErrors] = useState<Record<number, string>>({});
 
-  const selectedAgent = agents.find(a => a.id === selectedAgentId);
+  useEffect(() => {
+    const fetchAgentDetails = async () => {
+      if (!selectedAgentId) {
+        setSelectedAgentDetails(null);
+        return;
+      }
+      setIsLoadingDetails(true);
+      try {
+        const res = await fetch(`/api/v1/agents/${selectedAgentId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSelectedAgentDetails(data);
+        } else {
+          toast.error('Failed to fetch agent details');
+          setSelectedAgentDetails(null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch agent details:', error);
+        toast.error('Failed to fetch agent details');
+        setSelectedAgentDetails(null);
+      } finally {
+        setIsLoadingDetails(false);
+      }
+    };
+
+    fetchAgentDetails();
+  }, [selectedAgentId]);
 
   useEffect(() => {
-    if (selectedAgent) {
+    if (selectedAgentDetails) {
       setDetailData({
-        inputSchemaStr: JSON.stringify(selectedAgent.inputSchema || { type: 'object', properties: {} }, null, 2),
-        outputSchemaStr: JSON.stringify(selectedAgent.outputSchema || { type: 'object', properties: {} }, null, 2),
-        tools: (selectedAgent.tools || []).map(t => ({
+        inputSchemaStr: JSON.stringify(selectedAgentDetails.inputSchema || { type: 'object', properties: {} }, null, 2),
+        outputSchemaStr: JSON.stringify(selectedAgentDetails.outputSchema || { type: 'object', properties: {} }, null, 2),
+        tools: (selectedAgentDetails.tools || []).map(t => ({
           ...t,
           parameters: typeof t.parameters === 'object' ? JSON.stringify(t.parameters, null, 2) : t.parameters
         }))
@@ -58,7 +87,7 @@ export const AgentRegistry = () => {
       setValidationErrors({});
       setDetailToolValidationErrors({});
     }
-  }, [selectedAgentId, agents]);
+  }, [selectedAgentDetails]);
 
   const fetchAgents = async () => {
     try {
@@ -92,6 +121,7 @@ export const AgentRegistry = () => {
   const handleOpenCreate = () => {
     setEditingAgent(null);
     setToolValidationErrors({});
+    setModalValidationErrors({});
     setFormData({
       id: '',
       name: '',
@@ -110,6 +140,7 @@ export const AgentRegistry = () => {
   const handleOpenEdit = (agent: AgentDefinition) => {
     setEditingAgent(agent);
     setToolValidationErrors({});
+    setModalValidationErrors({});
     setFormData({
       id: agent.id,
       name: agent.name,
@@ -199,6 +230,15 @@ export const AgentRegistry = () => {
     const newToolErrors: Record<number, string> = {};
     let hasToolErrors = false;
 
+    const inputErr = validateSchema(formData.inputSchemaStr);
+    const outputErr = validateSchema(formData.outputSchemaStr);
+
+    if (inputErr || outputErr) {
+      setModalValidationErrors({ input: inputErr || undefined, output: outputErr || undefined });
+    } else {
+      setModalValidationErrors({});
+    }
+
     try {
       parsedTools = (formData.tools || []).map((t, idx) => {
         const err = validateSchema(t.parameters);
@@ -212,9 +252,9 @@ export const AgentRegistry = () => {
         };
       });
 
-      if (hasToolErrors) {
-        setToolValidationErrors(newToolErrors);
-        toast.error('Please fix tool parameter validation errors');
+      if (hasToolErrors || inputErr || outputErr) {
+        if (hasToolErrors) setToolValidationErrors(newToolErrors);
+        toast.error('Please fix validation errors');
         return;
       }
 
@@ -276,7 +316,7 @@ export const AgentRegistry = () => {
   };
 
   const handleSaveDetail = async () => {
-    if (!selectedAgent) return;
+    if (!selectedAgentDetails) return;
     
     const inputErr = validateSchema(detailData.inputSchemaStr);
     const outputErr = validateSchema(detailData.outputSchemaStr);
@@ -320,7 +360,7 @@ export const AgentRegistry = () => {
       };
 
       setIsSaving(true);
-      const res = await fetch(`/api/v1/agents/${selectedAgent.id}`, {
+      const res = await fetch(`/api/v1/agents/${selectedAgentDetails.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -573,21 +613,45 @@ export const AgentRegistry = () => {
 
               <TabsContent value="schemas" className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Input Schema (JSON)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-slate-300">Input Schema (JSON)</Label>
+                    {modalValidationErrors.input && (
+                      <span className="text-[10px] font-medium text-red-400 animate-in fade-in slide-in-from-right-1">
+                        {modalValidationErrors.input}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500">Define the structure of data this agent expects to receive.</p>
                   <Textarea 
                     value={formData.inputSchemaStr}
-                    onChange={(e) => setFormData({ ...formData, inputSchemaStr: e.target.value })}
-                    className="bg-slate-950 border-slate-700 text-slate-200 font-mono text-xs h-40"
+                    onChange={(e) => {
+                      setFormData({ ...formData, inputSchemaStr: e.target.value });
+                      if (modalValidationErrors.input) setModalValidationErrors(prev => ({ ...prev, input: undefined }));
+                    }}
+                    className={`bg-slate-950 border-slate-700 text-slate-200 font-mono text-xs h-40 ${
+                      modalValidationErrors.input ? 'border-red-500/50 ring-1 ring-red-500/20' : ''
+                    }`}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Output Schema (JSON)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-slate-300">Output Schema (JSON)</Label>
+                    {modalValidationErrors.output && (
+                      <span className="text-[10px] font-medium text-red-400 animate-in fade-in slide-in-from-right-1">
+                        {modalValidationErrors.output}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500">Define the structure of data this agent must return.</p>
                   <Textarea 
                     value={formData.outputSchemaStr}
-                    onChange={(e) => setFormData({ ...formData, outputSchemaStr: e.target.value })}
-                    className="bg-slate-950 border-slate-700 text-slate-200 font-mono text-xs h-40"
+                    onChange={(e) => {
+                      setFormData({ ...formData, outputSchemaStr: e.target.value });
+                      if (modalValidationErrors.output) setModalValidationErrors(prev => ({ ...prev, output: undefined }));
+                    }}
+                    className={`bg-slate-950 border-slate-700 text-slate-200 font-mono text-xs h-40 ${
+                      modalValidationErrors.output ? 'border-red-500/50 ring-1 ring-red-500/20' : ''
+                    }`}
                   />
                 </div>
               </TabsContent>
@@ -697,7 +761,7 @@ export const AgentRegistry = () => {
           </div>
         </div>
 
-        {selectedAgent && (
+        {selectedAgentId && (
           <div className="lg:col-span-5 animate-in fade-in slide-in-from-right-4 duration-300">
             <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-sm h-full flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between border-b border-slate-800 pb-4">
@@ -706,8 +770,12 @@ export const AgentRegistry = () => {
                     <Bot className="h-6 w-6" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg font-semibold text-white">{selectedAgent.name}</CardTitle>
-                    <p className="text-xs text-slate-500 font-mono">{selectedAgent.id}</p>
+                    <CardTitle className="text-lg font-semibold text-white">
+                      {isLoadingDetails ? 'Loading...' : selectedAgentDetails?.name || 'Loading...'}
+                    </CardTitle>
+                    <p className="text-xs text-slate-500 font-mono">
+                      {selectedAgentId}
+                    </p>
                   </div>
                 </div>
                 <Button 
@@ -719,8 +787,18 @@ export const AgentRegistry = () => {
                   <XCircle className="h-5 w-5" />
                 </Button>
               </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto p-6">
-                <Tabs defaultValue="schemas" className="w-full">
+              
+              {isLoadingDetails ? (
+                <CardContent className="flex-1 flex items-center justify-center p-6">
+                  <div className="text-slate-500 text-sm flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    Fetching agent details...
+                  </div>
+                </CardContent>
+              ) : selectedAgentDetails ? (
+                <>
+                  <CardContent className="flex-1 overflow-y-auto p-6">
+                    <Tabs defaultValue="schemas" className="w-full">
                   <TabsList className="grid w-full grid-cols-2 bg-slate-800 border border-slate-700 mb-4">
                     <TabsTrigger value="schemas" className="data-[state=active]:bg-slate-700">
                       <FileJson className="mr-2 h-4 w-4" />
@@ -865,9 +943,15 @@ export const AgentRegistry = () => {
                   disabled={isSaving}
                   className="bg-indigo-600 hover:bg-indigo-700"
                 >
-                  {isSaving ? 'Saving...' : 'Save Schemas'}
+                  {isSaving ? 'Saving...' : 'Save Schemas & Tools'}
                 </Button>
               </div>
+              </>
+              ) : (
+                <CardContent className="flex-1 flex items-center justify-center p-6">
+                  <div className="text-slate-500 text-sm">Failed to load agent details.</div>
+                </CardContent>
+              )}
             </Card>
           </div>
         )}
