@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Plus, Edit2, Trash2, Bot, CheckCircle2, XCircle, Wrench, FileJson } from 'lucide-react';
+import { Plus, Edit2, Trash2, Bot, CheckCircle2, XCircle, Wrench, FileJson, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AgentDefinition } from '../types/agent';
 
@@ -21,6 +21,7 @@ export const AgentRegistry = () => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDefinition | null>(null);
+  const [permissionInput, setPermissionInput] = useState('');
   const [formData, setFormData] = useState<Partial<AgentDefinition> & { tools?: any[], inputSchemaStr?: string, outputSchemaStr?: string }>({
     id: '',
     name: '',
@@ -29,6 +30,7 @@ export const AgentRegistry = () => {
     provider: '',
     model: '',
     enabled: true,
+    runtimeStatus: 'idle',
     tools: [],
     inputSchemaStr: '{\n  "type": "object",\n  "properties": {}\n}',
     outputSchemaStr: '{\n  "type": "object",\n  "properties": {}\n}'
@@ -130,7 +132,9 @@ export const AgentRegistry = () => {
       provider: providers[0]?.id || '',
       model: '',
       enabled: true,
+      runtimeStatus: 'idle',
       tools: [],
+      permissions: [],
       inputSchemaStr: '{\n  "type": "object",\n  "properties": {}\n}',
       outputSchemaStr: '{\n  "type": "object",\n  "properties": {}\n}'
     });
@@ -149,10 +153,12 @@ export const AgentRegistry = () => {
       provider: agent.provider,
       model: agent.model,
       enabled: agent.enabled,
+      runtimeStatus: agent.runtimeStatus || 'idle',
       tools: (agent.tools || []).map(t => ({
         ...t,
         parameters: typeof t.parameters === 'object' ? JSON.stringify(t.parameters, null, 2) : t.parameters
       })),
+      permissions: agent.permissions || [],
       inputSchemaStr: Object.keys(agent.inputSchema || {}).length > 0 ? JSON.stringify(agent.inputSchema, null, 2) : '{\n  "type": "object",\n  "properties": {}\n}',
       outputSchemaStr: Object.keys(agent.outputSchema || {}).length > 0 ? JSON.stringify(agent.outputSchema, null, 2) : '{\n  "type": "object",\n  "properties": {}\n}'
     });
@@ -215,6 +221,21 @@ export const AgentRegistry = () => {
     } catch (error) {
       toast.error('An error occurred while deleting');
     }
+  };
+
+  const handleAddPermission = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && permissionInput.trim()) {
+      e.preventDefault();
+      const newPerm = permissionInput.trim();
+      if (!formData.permissions?.includes(newPerm)) {
+        setFormData({ ...formData, permissions: [...(formData.permissions || []), newPerm] });
+      }
+      setPermissionInput('');
+    }
+  };
+
+  const handleRemovePermission = (perm: string) => {
+    setFormData({ ...formData, permissions: (formData.permissions || []).filter(p => p !== perm) });
   };
 
   const handleSave = async () => {
@@ -525,16 +546,62 @@ export const AgentRegistry = () => {
                     className="bg-slate-950 border-slate-700 text-slate-200"
                   />
                 </div>
-                
-                <div className="flex items-center space-x-2 mt-2">
-                  <input
-                    type="checkbox"
-                    id="enabled"
-                    checked={formData.enabled}
-                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                    className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+
+                <div className="space-y-2">
+                  <Label className="text-slate-300">Permissions</Label>
+                  <p className="text-xs text-slate-500">Press Enter to add system permissions (e.g., fs:read, network:http).</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {(formData.permissions || []).map((perm) => (
+                      <div key={perm} className="flex items-center gap-1 bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-md text-xs border border-indigo-500/30">
+                        <span>{perm}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePermission(perm)}
+                          className="text-indigo-400 hover:text-indigo-200 focus:outline-none"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <Input
+                    placeholder="Add permission..."
+                    value={permissionInput}
+                    onChange={(e) => setPermissionInput(e.target.value)}
+                    onKeyDown={handleAddPermission}
+                    className="bg-slate-950 border-slate-700 text-slate-200"
                   />
-                  <Label htmlFor="enabled" className="text-slate-300">Agent Enabled</Label>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-2 mt-2">
+                    <input
+                      type="checkbox"
+                      id="enabled"
+                      checked={formData.enabled}
+                      onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                      className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <Label htmlFor="enabled" className="text-slate-300">Agent Enabled</Label>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="runtimeStatus" className="text-slate-300">Runtime Status</Label>
+                    <Select 
+                      value={formData.runtimeStatus} 
+                      onValueChange={(value: any) => setFormData({ ...formData, runtimeStatus: value })}
+                    >
+                      <SelectTrigger className="bg-slate-950 border-slate-700 text-slate-200">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
+                        <SelectItem value="idle">Idle</SelectItem>
+                        <SelectItem value="running">Running</SelectItem>
+                        <SelectItem value="error">Error</SelectItem>
+                        <SelectItem value="offline">Offline</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </TabsContent>
 
@@ -715,17 +782,31 @@ export const AgentRegistry = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {agent.enabled ? (
-                          <div className="flex items-center gap-1.5 text-xs text-green-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Active
+                        <div className="flex flex-col gap-1">
+                          {agent.enabled ? (
+                            <div className="flex items-center gap-1.5 text-xs text-green-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Active
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <XCircle className="h-3.5 w-3.5" />
+                              Disabled
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className={`px-1.5 py-0.5 rounded-md ${
+                              agent.runtimeStatus === 'running' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                              agent.runtimeStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                              agent.runtimeStatus === 'offline' ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' :
+                              'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                            }`}>
+                              {agent.runtimeStatus === 'running' ? 'Running' :
+                               agent.runtimeStatus === 'error' ? 'Error' :
+                               agent.runtimeStatus === 'offline' ? 'Offline' : 'Idle'}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                            <XCircle className="h-3.5 w-3.5" />
-                            Disabled
-                          </div>
-                        )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">

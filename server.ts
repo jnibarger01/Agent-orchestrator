@@ -272,6 +272,7 @@ async function startServer() {
     res.json(agents.map((a: any) => ({
       ...a,
       enabled: !!a.enabled,
+      runtimeStatus: a.runtime_status,
       tools: JSON.parse(a.tools_json),
       permissions: JSON.parse(a.permissions_json),
       inputSchema: JSON.parse(a.input_schema_json),
@@ -286,6 +287,7 @@ async function startServer() {
     res.json({
       ...agent,
       enabled: !!agent.enabled,
+      runtimeStatus: agent.runtime_status,
       tools: JSON.parse(agent.tools_json),
       permissions: JSON.parse(agent.permissions_json),
       inputSchema: JSON.parse(agent.input_schema_json),
@@ -294,7 +296,7 @@ async function startServer() {
   });
 
   app.post("/api/v1/agents", authMiddleware, (req, res) => {
-    const { id, name, role, description, provider, model, tools, permissions, inputSchema, outputSchema, enabled } = req.body;
+    const { id, name, role, description, provider, model, tools, permissions, inputSchema, outputSchema, enabled, runtimeStatus } = req.body;
     
     // Validation
     if (!id || !name || !role || !provider) {
@@ -315,8 +317,8 @@ async function startServer() {
         INSERT INTO agents (
           id, name, role, description, provider, model, 
           tools_json, permissions_json, input_schema_json, output_schema_json, 
-          enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          enabled, runtime_status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const now = Date.now();
@@ -327,6 +329,7 @@ async function startServer() {
         JSON.stringify(inputSchema || {}),
         JSON.stringify(outputSchema || {}),
         enabled !== undefined ? (enabled ? 1 : 0) : 1,
+        runtimeStatus || 'idle',
         now, now
       );
       
