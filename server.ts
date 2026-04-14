@@ -411,10 +411,48 @@ async function startServer() {
     }
   });
 
+  app.get("/api/v1/workflows", authMiddleware, (req, res) => {
+    const rows = db.prepare("SELECT * FROM workflows ORDER BY created_at DESC").all() as any[];
+    res.json(rows.map(row => ({ ...row, steps: JSON.parse(row.steps_json) })));
+  });
+
   app.get("/api/v1/workflows/:id", authMiddleware, (req, res) => {
     const row = db.prepare("SELECT * FROM workflows WHERE id = ?").get(req.params.id) as any;
     if (!row) return res.status(404).json({ error: "Workflow not found" });
     res.json({ ...row, steps: JSON.parse(row.steps_json) });
+  });
+
+  app.patch("/api/v1/workflows/:id", authMiddleware, (req, res) => {
+    const { name, version, description, initialStep, steps } = req.body;
+    const workflow = db.prepare("SELECT * FROM workflows WHERE id = ?").get(req.params.id) as any;
+    if (!workflow) return res.status(404).json({ error: "Workflow not found" });
+
+    try {
+      const update = db.prepare(`
+        UPDATE workflows 
+        SET name = ?, version = ?, description = ?, initial_step = ?, steps_json = ?, updated_at = ?
+        WHERE id = ?
+      `);
+      const now = Date.now();
+      update.run(
+        name || workflow.name,
+        version || workflow.version,
+        description !== undefined ? description : workflow.description,
+        initialStep || workflow.initial_step,
+        steps ? JSON.stringify(steps) : workflow.steps_json,
+        now,
+        req.params.id
+      );
+      res.json({ message: "Workflow updated successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/v1/workflows/:id", authMiddleware, (req, res) => {
+    const result = db.prepare("DELETE FROM workflows WHERE id = ?").run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: "Workflow not found" });
+    res.status(204).send();
   });
 
   app.post("/api/v1/workflow-runs", authMiddleware, async (req, res) => {

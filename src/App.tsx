@@ -6,12 +6,13 @@ import { TaskList } from './components/TaskList';
 import { LogViewer } from './components/LogViewer';
 import { ProviderSettings } from './components/ProviderSettings';
 import { AgentRegistry } from './components/AgentRegistry';
+import { WorkflowManagement } from './components/WorkflowManagement';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Separator } from './components/ui/separator';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import { LayoutDashboard, ListTodo, Terminal, Settings, Cpu, Users } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Terminal, Settings, Cpu, Users, GitBranch } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -150,6 +151,10 @@ export default function App() {
                 <Users className="mr-2 h-4 w-4" />
                 Agent Registry
               </TabsTrigger>
+              <TabsTrigger value="workflows" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-slate-400">
+                <GitBranch className="mr-2 h-4 w-4" />
+                Workflows
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -263,6 +268,10 @@ export default function App() {
 
           <TabsContent value="agents" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
             <AgentRegistry />
+          </TabsContent>
+
+          <TabsContent value="workflows" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+            <WorkflowManagement />
           </TabsContent>
         </Tabs>
       </main>
