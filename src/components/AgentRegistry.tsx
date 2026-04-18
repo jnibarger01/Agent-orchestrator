@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Plus, Edit2, Trash2, Bot, CheckCircle2, XCircle, Wrench, FileJson, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AgentDefinition } from '../types/agent';
+import Ajv from 'ajv';
 
 export const AgentRegistry = () => {
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
@@ -327,9 +328,14 @@ export const AgentRegistry = () => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         return 'Schema must be a JSON object';
       }
-      if (!parsed.type) {
-        return 'Schema must have a "type" property (e.g., "object")';
+      
+      const ajv = new Ajv();
+      try {
+        ajv.compile(parsed);
+      } catch (compileError: any) {
+        return `Invalid JSON Schema: ${compileError.message}`;
       }
+
       return null;
     } catch (e) {
       return 'Invalid JSON syntax';

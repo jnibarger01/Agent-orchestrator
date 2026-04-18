@@ -499,10 +499,10 @@ export function WorkflowManagement() {
                     <div className="pt-4 border-t border-slate-800">
                       <Button 
                         onClick={() => handleRunWorkflow(selectedWorkflowDetails.id)}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
                       >
                         <Play className="mr-2 h-4 w-4" />
-                        Execute Workflow
+                        Start New Run
                       </Button>
                     </div>
 
