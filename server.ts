@@ -455,6 +455,11 @@ async function startServer() {
     res.status(204).send();
   });
 
+  app.get("/api/v1/workflows/:id/runs", authMiddleware, (req, res) => {
+    const rows = db.prepare("SELECT * FROM workflow_runs WHERE workflow_id = ? ORDER BY created_at DESC").all(req.params.id) as any[];
+    res.json(rows.map(row => ({ ...row, context: JSON.parse(row.context_json) })));
+  });
+
   app.post("/api/v1/workflow-runs", authMiddleware, async (req, res) => {
     const { workflowId, inputs } = req.body;
     if (!workflowId) return res.status(400).json({ error: "Missing workflowId" });

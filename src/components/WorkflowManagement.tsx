@@ -9,12 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Plus, Edit2, Trash2, GitBranch, FileJson, Play, History, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { WorkflowDefinition } from '../types/workflow';
+import { WorkflowDefinition, WorkflowRun } from '../types/workflow';
 
 export function WorkflowManagement() {
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [selectedWorkflowDetails, setSelectedWorkflowDetails] = useState<WorkflowDefinition | null>(null);
+  const [workflowRuns, setWorkflowRuns] = useState<WorkflowRun[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -56,12 +57,21 @@ export function WorkflowManagement() {
   const fetchWorkflowDetails = async (id: string) => {
     setIsLoadingDetails(true);
     try {
-      const res = await fetch(`/api/v1/workflows/${id}`);
-      if (res.ok) {
-        const data = await res.json();
+      const [detailsRes, runsRes] = await Promise.all([
+        fetch(`/api/v1/workflows/${id}`),
+        fetch(`/api/v1/workflows/${id}/runs`)
+      ]);
+      
+      if (detailsRes.ok) {
+        const data = await detailsRes.json();
         setSelectedWorkflowDetails(data);
       } else {
         toast.error('Failed to fetch workflow details');
+      }
+
+      if (runsRes.ok) {
+        const runsData = await runsRes.json();
+        setWorkflowRuns(runsData);
       }
     } catch (error) {
       toast.error('An error occurred while fetching details');
@@ -194,6 +204,9 @@ export function WorkflowManagement() {
       if (res.ok) {
         const data = await res.json();
         toast.success(`Workflow run started: ${data.id}`);
+        if (selectedWorkflowId) {
+          fetchWorkflowDetails(selectedWorkflowId);
+        }
       } else {
         const errorData = await res.json();
         toast.error(errorData.error || 'Failed to start workflow run');
@@ -491,6 +504,62 @@ export function WorkflowManagement() {
                         <Play className="mr-2 h-4 w-4" />
                         Execute Workflow
                       </Button>
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-800">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                          <History className="h-4 w-4 text-slate-400" />
+                          Recent Runs
+                        </h3>
+                        <span className="text-xs text-slate-500 font-mono">{workflowRuns.length} TOTAL</span>
+                      </div>
+                      
+                      <div className="rounded-md border border-slate-800 overflow-hidden">
+                        <Table>
+                          <TableHeader className="bg-slate-800/50">
+                            <TableRow className="border-slate-800 hover:bg-transparent">
+                              <TableHead className="text-slate-400 text-xs">Run ID</TableHead>
+                              <TableHead className="text-slate-400 text-xs">Status</TableHead>
+                              <TableHead className="text-slate-400 text-xs">Start Time</TableHead>
+                              <TableHead className="text-slate-400 text-xs text-right">Duration</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {workflowRuns.length === 0 ? (
+                              <TableRow className="border-slate-800 hover:bg-slate-800/20">
+                                <TableCell colSpan={4} className="text-center py-6 text-sm text-slate-500 italic">
+                                  No runs recorded yet.
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              workflowRuns.map(run => (
+                                <TableRow key={run.id} className="border-slate-800 hover:bg-slate-800/20">
+                                  <TableCell className="font-mono text-xs text-slate-400">
+                                    {run.id.split('-')[0]}...
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                      run.status === 'completed' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                      run.status === 'failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                      run.status === 'running' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                      'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                                    }`}>
+                                      {run.status.toUpperCase()}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-slate-400">
+                                    {new Date(run.createdAt).toLocaleString()}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-slate-400 text-right">
+                                    {run.updatedAt > run.createdAt ? `${((run.updatedAt - run.createdAt) / 1000).toFixed(1)}s` : '-'}
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   </>
                 ) : (
